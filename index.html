@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<meta charset="UTF-8">
+<title>レポート生成ツール</title>
+
+<style>
+body {
+  font-family: sans-serif;
+  max-width: 700px;
+  margin: auto;
+}
+
+textarea {
+  width: 100%;
+  height: 60px;
+  margin-bottom: 10px;
+}
+
+button {
+  margin: 10px 5px 10px 0;
+}
+
+.section {
+  border: 1px solid #ccc;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Markdownレポート生成ツール</h1>
+<p>入力欄が空白の項目は自動的に省略されます。必要な項目だけ入力してください。</p>
+
+<h2>タイトル</h2>
+<textarea id="title"></textarea>
+
+<h2>学籍番号</h2>
+<textarea id="studentId"></textarea>
+
+<h2>名前</h2>
+<textarea id="name"></textarea>
+
+<h2>目的</h2>
+<textarea id="purpose"></textarea>
+
+<h2>実験</h2>
+
+<div id="singleExperiment" class="section">
+  実験内容<br>
+  <textarea id="singleContent"></textarea>
+
+  実験結果<br>
+  <textarea id="singleResult"></textarea>
+
+  検討<br>
+  <textarea id="singleDiscussion"></textarea>
+</div>
+
+<div id="experiments"></div>
+
+<button onclick="addExperiment()">実験を追加</button>
+
+<h2>感想</h2>
+<textarea id="impression"></textarea>
+
+<h2>考察</h2>
+<textarea id="finalDiscussion"></textarea>
+
+<br><br>
+
+<button onclick="generateMarkdown()">生成</button>
+<button onclick="resetAll()">リセット</button>
+
+<h2>出力</h2>
+<button onclick="copyOutput()" id="copyBtn">コピー</button>
+<textarea id="output" style="height:200px;"></textarea>
+
+<button onclick="downloadPDF()">PDFダウンロード</button>
+
+<h2>プレビュー</h2>
+<div id="preview" style="border:1px solid #ccc; padding:10px;"></div>
+
+<script>
+
+// ===== 状態 =====
+let expCount = 1;
+let multiMode = false;
+
+// ===== 空欄チェック =====
+function isEmpty(text){
+  return !text || text.trim() === "";
+}
+
+// ===== 実験作成 =====
+function createExperimentElement(number){
+  const div = document.createElement("div");
+  div.className = "section";
+
+  div.innerHTML = `
+    <h3 class="exp-title">実験${number}</h3>
+
+    実験内容<br>
+    <textarea class="content"></textarea>
+
+    実験結果<br>
+    <textarea class="result"></textarea>
+
+    検討<br>
+    <textarea class="discussion"></textarea>
+
+    <button onclick="deleteExperiment(this)">削除</button>
+  `;
+
+  return div;
+}
+
+// ===== 実験追加 =====
+function addExperiment(){
+  const container = document.getElementById("experiments");
+  const single = document.getElementById("singleExperiment");
+
+  if(!multiMode){
+    const content = document.getElementById("singleContent").value;
+    const result = document.getElementById("singleResult").value;
+    const discussion = document.getElementById("singleDiscussion").value;
+
+    single.style.display = "none";
+
+    const first = createExperimentElement(1);
+    container.appendChild(first);
+
+    first.querySelector(".content").value = content;
+    first.querySelector(".result").value = result;
+    first.querySelector(".discussion").value = discussion;
+
+    multiMode = true;
+    expCount = 2;
+  } else {
+    const newExp = createExperimentElement(expCount);
+    container.appendChild(newExp);
+    expCount++;
+  }
+}
+
+// ===== 実験削除 =====
+function deleteExperiment(button){
+  const exp = button.parentElement;
+  exp.remove();
+  renumberExperiments();
+}
+
+// ===== 番号振り直し =====
+function renumberExperiments(){
+  const experiments = document.querySelectorAll("#experiments .section");
+
+  experiments.forEach((exp, i) => {
+    exp.querySelector(".exp-title").textContent = `実験${i+1}`;
+  });
+
+  expCount = experiments.length + 1;
+
+  if(experiments.length === 0){
+    document.getElementById("singleExperiment").style.display = "block";
+    multiMode = false;
+    expCount = 1;
+  }
+}
+
+// ===== Markdown生成 =====
+function generateMarkdown(){
+  let md = "";
+
+  const title = document.getElementById("title").value;
+  const studentId = document.getElementById("studentId").value;
+  const name = document.getElementById("name").value;
+  const purpose = document.getElementById("purpose").value;
+
+  if(!isEmpty(title)) md += `# ${title}\n`;
+
+  if(!isEmpty(studentId) || !isEmpty(name)){
+    md += `${studentId} ${name}\n\n`;
+  } else {
+    md += `\n`;
+  }
+
+  if(!isEmpty(purpose)){
+    md += `## 目的\n> ${purpose}\n\n`;
+  }
+
+  if(!multiMode){
+    const content = document.getElementById("singleContent").value;
+    const result = document.getElementById("singleResult").value;
+    const discussion = document.getElementById("singleDiscussion").value;
+
+    if(!isEmpty(content)){
+      md += `## 実験内容\n> ${content}\n\n`;
+    }
+
+    if(!isEmpty(result)){
+      md += `## 実験結果\n${result}\n\n`;
+    }
+
+    if(!isEmpty(discussion)){
+      md += `## 検討\n${discussion}\n\n`;
+    }
+
+  } else {
+    const experiments = document.querySelectorAll("#experiments .section");
+
+    experiments.forEach((exp, i) => {
+      md += `## 実験${i+1}\n\n`;
+
+      const content = exp.querySelector(".content").value;
+      const result = exp.querySelector(".result").value;
+      const discussion = exp.querySelector(".discussion").value;
+
+      if(!isEmpty(content)){
+        md += `### 実験内容\n> ${content}\n\n`;
+      }
+
+      if(!isEmpty(result)){
+        md += `### 実験結果\n${result}\n\n`;
+      }
+
+      if(!isEmpty(discussion)){
+        md += `### 検討\n${discussion}\n\n`;
+      }
+    });
+  }
+
+  const impression = document.getElementById("impression").value;
+  const finalDiscussion = document.getElementById("finalDiscussion").value;
+
+  if(!isEmpty(impression)){
+    md += `## 感想\n${impression}\n\n`;
+  }
+
+  if(!isEmpty(finalDiscussion)){
+    md += `## 考察\n${finalDiscussion}\n\n`;
+  }
+
+  document.getElementById("output").value = md;
+}
+
+// ===== コピー =====
+function copyOutput(){
+  const text = document.getElementById("output").value;
+  const btn = document.getElementById("copyBtn");
+
+  navigator.clipboard.writeText(text)
+    .then(() => {
+      btn.textContent = "コピー完了！";
+      setTimeout(() => {
+        btn.textContent = "コピー";
+      }, 1500);
+    });
+}
+
+// ===== リセット =====
+function resetAll(){
+  document.querySelectorAll("textarea").forEach(t => t.value = "");
+
+  document.getElementById("singleExperiment").style.display = "block";
+  document.getElementById("experiments").innerHTML = "";
+
+  multiMode = false;
+  expCount = 1;
+}
+
+function updatePreview(){
+  generateMarkdown();
+  const md = document.getElementById("output").value;
+
+  // 超簡易Markdown→HTML変換
+  let html = md
+    .replace(/^### (.*$)/gim, "<h3>$1</h3>")
+    .replace(/^## (.*$)/gim, "<h2>$1</h2>")
+    .replace(/^# (.*$)/gim, "<h1>$1</h1>")
+    .replace(/^> (.*$)/gim, "<blockquote>$1</blockquote>")
+    .replace(/\n/g, "<br>");
+
+  document.getElementById("preview").innerHTML = html;
+}
+
+document.querySelectorAll("textarea").forEach(t => {
+  t.addEventListener("input", updatePreview);
+});
+
+function downloadPDF(){
+  updatePreview(); // 最新にする
+
+  const element = document.getElementById("preview");
+
+  html2pdf().from(element).save("report.pdf");
+}
+
+</script>
+
+</body>
+</html>
